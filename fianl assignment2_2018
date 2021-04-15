@@ -1,0 +1,103 @@
+
+use "C:\Users\Yang hee Shin\Desktop\Longitudinal\excercise\niep.dta", clear
+
+*b)
+list, sepby(vw)
+xtdes
+bys newpnr: egen emp=max(ch03)
+
+*c)
+*continuous variable of time
+logit emp wellez
+predict log1, r
+est store clog
+
+logit emp wellez, or
+predict log2, r
+est store clog_or
+
+*dummy variable of time
+logit emp i.wellez
+predict log3, r
+est store dlog
+
+*estimate the OR
+logit emp i.wellez, or
+predict log4, r
+est store dlog_or
+
+est tab clog clog_or dlog dlog_or 
+
+*estimate the percentage change in the odds based on the regression coefficeint
+mat b = e(b)
+dis exp(b[1,1])
+dis exp(0.2052217) 
+dis (exp(0.2052217)-1)*100
+ 
+*e) 
+label define edu 5 "sonst." 4 "(Fach-) Abi" 3 "mittl. Reife" 2 "HS" 1 "Sonderschule" 0 "(noch) kein Abschluss"
+recode edu (5 4 =1) (*=0), gen(edu2)
+
+xi: logit emp age sex ausb1 erwst2a edu2 afg hlu i.wellez
+predict hazard, p
+xi: logit, or
+
+*f)
+gen survive = exp(sum(ln(1-hazard))) 
+
+*predicted conditional transition probability for sex=0, abitur=1, ausb1=0, age=30, afg=0, hlu=0.
+*predict wellnez 6 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2])))
+dis exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464))
+dis exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464))/(1+exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464)))
+*predict wellnez 1 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]+ 1*_b[_Iwellez_1])))
+dis exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464)+1*(1.977029))
+dis exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464)+1*(1.977029))/(1+exp(1.928015 + 30*(-0.0581269) + 1*(0.3285464)+1*(1.977029)))
+*predict wellnez 2 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]+ 1*_b[_Iwellez_2])))
+*predict wellnez 3 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]+ 1*_b[_Iwellez_3])))
+*predict wellnez 4 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]+ 1*_b[_Iwellez_4])))
+*predict wellnez 5 by hand
+mat b=e(b)
+dis exp(b[1,1])
+dis 1/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]+ 1*_b[_Iwellez_5])))
+
+
+gen hz = exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2]))/(1+exp(-(_b[_cons] + 30*_b[age]+ 1*_b[edu2])))
+
+gen      hr    = _b[_cons] + 32*_b[age] + 0*_b[sex] + 1*_b[edu2]
+replace  hr    = _b[_cons] + 30*_b[age] + 0*_b[sex] + 1*_b[edu2] +  1*_b[_Iwellez_1] if wellez ==1
+replace  hr    = _b[_cons] + 30*_b[age] + 0*_b[sex] + 1*_b[edu2] +  1*_b[_Iwellez_2] if wellez ==2
+replace  hr    = _b[_cons] + 31*_b[age] + 0*_b[sex] + 1*_b[edu2] +  1*_b[_Iwellez_3] if wellez ==3
+replace  hr    = _b[_cons] + 31*_b[age] + 0*_b[sex] + 1*_b[edu2] +  1*_b[_Iwellez_4] if wellez ==4
+replace  hr    = _b[_cons] + 32*_b[age] + 0*_b[sex] + 1*_b[edu2] +  1*_b[_Iwellez_5] if wellez ==5
+gen      hhat = exp(hr)/(1+exp(hr))
+
+aaplot hhat wellez, jitter(20) title("Prediction of Hazard rate aging from 30 by time")
+graph save hrpredict, replace
+graph twoway scatter hz wellez, jitter(20) title("Hazard rate with age of 30 and edu by time")
+graph save hr30, replace
+graph twoway line survive age, title("Survival rate by age")
+graph save s_age, replace
+graph twoway line survive wellez, title("Survival rate by interview time point")
+graph save s_time, replace
+graph twoway line hhat wellez, jitter(20) title("Prediction of Hazard rate aging from 30 by time")
+graph save hrpredict_line, replace
+graph twoway line hz wellez, jitter(20) title("Hazard rate with age of 30 and edu by time")
+graph save hr30_line, replace
+
+graph combine "hrpredict" "hr30" "s_age" "s_time", xsize(6)
+graph combine "hrpredict_line" "hr30_line", xsize(6)
