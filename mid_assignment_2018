@@ -1,0 +1,81 @@
+use "C:\Users\Yang hee Shin\Desktop\Longitudinal\gpa3.dta", clear
+
+tabulate term spring
+sum id-season
+
+*1-a)
+xtset id term
+xtdes
+reg trmgpa spring sat hsperc female black white frstsem tothrs crsgpa season
+predict res_1, r
+estimates store pols
+
+*1-b) without spring and season
+reg trmgpa sat hsperc female black white frstsem tothrs crsgpa
+predict res_2, r
+estimates store pols_2
+
+xtreg trmgpa spring sat hsperc female black white frstsem tothrs crsgpa i.season, fe
+predict fe
+estimates store fe
+
+*1-c) generate dummy variables of season
+gen fall=season
+recode fall (1=1) (*=0)
+reg trmgpa spring fall sat hsperc female black white frstsem tothrs crsgpa
+predict res_f, r
+estimates store pols_f
+
+reg trmgpa spring fall sat hsperc female black white frstsem tothrs crsgpa i.season, cluster(season)
+predict res_r, r
+estimates store pols_r
+
+*1-d) consider interaction effect
+pwcorr trmgpa spring fall sat hsperc female black white frstsem tothrs crsgpa season, star(0.05)
+gen int_crs_hsp=crsgpa*hsperc
+reg trmgpa sat hsperc female black white frstsem tothrs crsgpa int_crs_hsp i.season, cluster(season)
+predict res_3, r
+estimates store pols_3
+est tab pols pols_2 pols_r pols_f pols_3 fe, b se stats(N r2) 
+
+
+*2-a)
+use "C:\Users\Yang hee Shin\Desktop\Longitudinal\excercise\wagepan.dta", clear
+
+xtset nr year, yearly
+xtdes
+reg lwage educ black hisp
+predict pl, r
+estimates store pl
+
+*2-b)
+xtreg lwage educ black hisp, re
+predict re
+estimates store re
+est tab pl re, b se stats(N r2) 
+
+*2-c)
+
+*2-d)
+reg lwage educ black hisp i.year
+est store pl_yr
+
+xtreg lwage educ black hisp i.year, fe
+est store fe_yr
+est tab pl_yr fe_yr, b se
+
+*2-e)
+reg lwage i.year
+est store pl_yr1
+xtreg lwage i.year, fe
+est store fe_yr1
+est tab pl_yr fe_yr pl_yr1 fe_yr1, b se
+
+est tab pl re pl_yr fe_yr pl_yr1 fe_yr1, star stats(N r2)
+est tab pl re pl_yr fe_yr pl_yr1 fe_yr1, b se stats(N r2)
+
+
+*2-f)
+
+
+
