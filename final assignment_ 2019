@@ -1,0 +1,268 @@
+clear 
+set more off
+version 12
+
+* Set global paths for data and working directory
+global DATA_PATH "C:\Users\Yang hee Shin\Desktop\longitudinal 2019\SOEP_v32_1_50perc_stata12\"		// directory of original data 
+global WORK_PATH "C:\Users\Yang hee Shin\Desktop\longitudinal 2019\exercise\"        		// working directory  
+
+
+*Exercise 1-(a)
+
+/*Variable name
+hhnr-household number, hhnrakt-wave, whhnr-current wave household number, Persnr-person ID
+alg2$$ (06->the year of 2006): Unemployment Benefit II
+chspt$$: Child Allowance in HH
+d11106$$: Number of Persons in HH
+*/
+
+local year=2006
+foreach wave in w x y z ba{           // with a loop command, set required periods from the year of 2006 to 2010
+	cd "${DATA_PATH}"     // move to the directory of 'DATA_PATH'
+	use `wave'pequiv.dta, clear // use the file with composition of the year name, and clear the display
+	ren persnr id         // change a variable name 'persnr' (the old name) to 'id' (a new name)             
+	gen year=`year'       // create a column for the wave distinguishment
+	ren alg2 alg2         // change a variable name 'alg2$$' to 'alg2' (Unemployment Benefit II)         
+	ren chspt chspt       // change a variable name 'chspt$$' to 'chspt' (Child Allowance in HH)
+	ren d11106 d11106     // change a variable name 'd11106$$' to 'd11106' (Number of Persons in HH)
+	keep id year hhnr hhnrakt alg2   /// except for described variables, the others in the wave are dropped out
+	             chspt d11106     
+	cd "${WORK_PATH}"                 // move to the path of 'WORK_PATH'
+	save `wave'pequiv.dta, replace    // save the file worked with replacement of the file 
+	local year=`year'+1   		      // execute a next loop by adding one year
+}								      // end the loop command
+
+use wpequiv.dta, clear                // open 'wpequiv.dta' file
+ 
+foreach wave in x y z ba{             // with a loop command, set required periods from the year of 2006 to 2010
+	append using `wave'pequiv.dta     // extracted waves of 2006-2010 in the above loop are gatherd in the year of 2006 file
+}
+save Shin_Yanghee.dta, replace  	  // save the file as the name of 'Shin_Yanghee.dta' with replacement of the file
+
+
+
+*Exercise 1-(b)
+/*
+-What is the average Unemployment benefit II across all time points and respondents? 
+Overall mean is 756.0318 and overall variation is 2620.091.
+-What is the within and between variation?
+(results from 'xtsum' command)
+Between variation (Standard deviation) is 2,888.64 and within variation is 1,105.183.
+Differences between persons are larger than those of within an individual overtime.
+So, we can assume individuals who get unemployment benefits are more likely to get the benefits, 
+whereas those without benefits are less likely to do.
+*/
+
+xtset id year		// define panel data with id as person identifier and year as wave indicator 
+xtdes   			// describe patterns of the panel data
+*26,067 persons are in the data, and measurements are 5 years.
+*The total observations are 74,953, not 130,335(=26,067*5) because it's unbalanced.
+*36.8% (9,593) of individuals have 5 measurements, 8,809 have only 5th measurement. 
+xtsum alg2 chspt d11106  // summarize the panel data information
+*74,953 person-years are in the data for the unemployment benefits variable
+*26,067 persons are in the data for the unemployment benefits variable
+recode alg2 (1/max=1), gen(bi_alg2)  // Unemployment benefits (UB) are transformed to binary 
+recode chspt (1/max=1), gen(bi_chspt)  // Unemployment benefits (UB) are transformed to binary
+recode d11106 (7/max=7), gen(ca_d11106) // more than 7 family members in a household are combined with the category of 7
+xttrans bi_alg2, freq  // report transition probabilities that the status of getting unemployment benefits changes over time
+/* 925 observations are receiving UB in the ending status from a former status of no receiving UB.
+ In other word, only 2% observations are changed into getting benefits from not getting benefits status (44,219).
+ Considering 76.94% of getting benefits are remained still a beneficiary from getting benefits status,
+ we can say that people with UB or without UB have a staus-quo tendancy to retain their former status, 
+although most of them are not taking unemployment benefits.
+the row means (t0), the column means(t+1)
+*/
+xttrans bi_chspt, freq 
+* At the former time point, 95.65% of observations are not taking Child Allowance (CA). 
+* Only 3.35% of them are changed to get CA in the next time point. 
+*95.03% in 4.97% of the former status with CA are keeping getting CA.
+xttrans ca_d11106, freq
+* Most of individuals don't have many changes in the number of family within 5 years.
+* Almost 3 of 4 household are constitute of 2-4 family members. 
+xttab bi_alg2
+* For 'Overall' column, 89.09% (66,773) of the total observations (74,953) are not getting UB, while 10.91% (8,180) are getting UB.
+* For 'Between' column, 23,056 among between observations are at least not getting UB, while 4,472 are at least (ever) getting UB in his/her observations.
+* FOr 'Within' column, 97.29% for 23,056 between observations are not experienced getting UB, while 81.28% for 4,472 between observations are experienced getting UB.
+xttab bi_chspt
+* For 'Overall' column, 41.38% (31,017) of the total observations (74,953) are not getting CA, while 58.62% (43,936) are getting CA.
+* For 'Between' column, 9,590 among between observations are at least not getting CA, while 18,336 are at least (ever) getting CA in his/her observations.
+* FOr 'Within' column, 89.53% for 9,590 between observations are not experienced getting CA, while 95.34% for 18,336 between observations are experienced getting CA.
+xttab ca_d11106 
+* For 'Overall' column, 10.06% (7,946) of the total observations (74,953) are single household.
+* For 'Between' column, 2,542 among between observations are at least once a single in his/her observations.
+* For 'Within' column, 81.23% for 2,542 between observations are experienced a single within his/her observations.
+
+
+*Exercise 2-(a)
+
+/*
+Step 1 and 2 are for processes of data preparation. 
+In the step 1, with loop, data between 1984 and 2010 will be combined. 
+'pfad' is about basic demographic household and personal data.
+With the first 'foreach', certain variable, such as life satisfaction and nation, are extracted and renamed.
+And then, those data from 1985 to 2010 are attached to the first wave, 1984, by the 'append' command. 
+The attached file is saved as 'master.dta'.
+In the step 2, 'pfad' data of 1999 is worked. A variable of ��persnr�� is changed to ��id��. 
+And certain meaningful variables such as ��sex�� and ��gebjahr�� are extracted. Rests of other variables are thrown away. 
+Then, with a ��merge�� command, the data is logically combined to the ��master.dta�� file by the ��id�� variable. 
+��1:m�� can match the data to correspond ��One-to-many�� data on ��id��. While using ��merge��, Stata creates a column ��_merge�� on the merge status. 
+The value ��3�� of the column ��_merge�� means that two merged data are exactly matched to each other. 
+The value ��1�� of that is not matched. So, the user can notice where the unmet data comes from.
+For the longitudinal analysis, the data should be organized with 'xtdes' and 'xtset'.
+The 'year' variable that is created in the loop command works as the wave for the data set.
+*/
+
+global pfad1 "C:\Users\Yang hee Shin\Desktop\longitudinal 2019\SOEP_v32_1_50perc_stata12\"	// directory of original data 
+global pfad2 "C:\Users\Yang hee Shin\Desktop\longitudinal 2019\exercise\" 									// working directory  
+
+***************************************************************
+*** 1. STEP    *******
+***************************************************************
+
+local year=1984                         // set a beginning year
+foreach wave in a b c d e f g h i j k l m n o p q r s t u v w x y z ba{  // set required periods - 'a' means the year of 1984 and 'ba' does 2010 in a loop command
+	cd "${pfad1}"  // move to the directory of 'pfad1'
+	use `wave'pgen.dta, clear // use the file with composition of the year name, and clear the display
+	ren persnr id         // change a variable name 'persnr' (the old name) to 'id' (a new name)             
+	gen year=`year'       // create a column for the wave distinguishment
+	ren month month       // change a variable name 'month$$' to 'month'             
+	ren lfs lfs           // change a variable name 'lfs$$' to 'lfs'
+	ren nation nation     // change a variable name 'nation$$' to 'nation'
+	ren `wave'famstd famstd       // change a variable name which varies with the wave
+	keep id year hhnr hhnrakt month   /// except for described variables, the others in the wave are dropped out
+	             lfs famstd nation     
+	cd "${pfad2}"                   // move to the path of 'pfad2'
+	save `wave'work.dta, replace    // save the file worked with replacement of the file 
+	local year=`year'+1     // execute a next loop by adding one year
+}							// end the loop command
+use awork.dta, clear        // open the 'awork.dta' file          
+foreach wave in b c d e f g h i j k l m n o p q r s t u v w x y z ba{  // with a loop command, set required periods from the year of 1985 to 2010
+	append using `wave'work.dta  // extracted waves of 1985-2010 in the above loop are gatherd in the year of 1984 file 
+}
+save master.dta, replace         // save the file as the name of 'master.dta' with replacement of the file
+
+
+***************************************************************
+*** 2. STEP:                 *******
+***************************************************************
+
+cd "${pfad1}"              // move to the directory of 'pfad1'
+use ppfad.dta, clear       // use the file with composition of the year name, and clear the display      
+ren persnr id              // change a variable name 'persnr' (the old name) to 'id' (a new name)
+keep id psample sex gebjahr    /// except for described variables, the others in the wave are dropped out 
+        loc1989 migback         
+cd "${pfad2}"              // move to the path of 'pfad2'
+merge 1:m id using master.dta    // combined to the ��master.dta�� file by the ��id�� variable. '1:m�� means 'one to many` data for a 'id'.
+drop if _merge==1                // delete the observation which are not corresponded to the existing data
+drop _merge                      // delete the column of '_merge'
+
+save master.dta, replace   // save the file as the name of 'master.dta' with  replacement of the file
+
+
+
+*Exercise 3-(a)
+
+cd "${WORK_PATH}"
+use Happiness.dta
+sort id
+gen                   recnr   = _n    // assign numbers to observations									
+bysort id (year): gen pynr    = _n    // assign numbers to observations within individuals
+bysort id:        gen pycount = _N    // count a total number of observations within (for each) individual
+gen first_wave= year ==1              // identify the first wave
+replace hhincnet = hhincnet/1000      // measure the household income hhincnet in ��1000
+keep if pycount >1                    /// keep only the observations of respondents who have participated at least twice
+
+foreach x in marry mardur relstat age woman hhincnet cohort{
+ recode `x' (min/-1=.)
+}
+
+*Exercise 3-(b)
+xtset id year							// define panel data with id as person identifier and year as wave indicator 
+xtdes   	 							// describe patterns of the panel data
+*1,972 persons are in the data, and measurements are 6 years.
+*The total observations are 7,176, not 11,832(=1,972*6) because it's unbalanced.
+*34.74% (685) of the individuals have 6 measurements, 542 (27.48%) have only the first measurement. 
+xtsum marry mardur relstat age woman hhincnet cohort  // summarize the panel data information
+*7,176 person-years are in the data for the above variables except for hhincnet and mardur 
+*1,972 persons are in the data for the above variables, except for hhincnet and mardur
+*The average of the measurement frequency for 'marry' is 3.63895.
+*The overall mean of 'marry' is 0.1128763. About 11% of the observations are in marriage.
+*The between variation of 'marry' is about 0.20 and the within variation is about 21%.
+*For the marriage duration, between variation is smaller than within variation. 
+*Especially, woman and cohort have no change overtime so that the within variation is 0.
+*On average, a sample would be 11% in marriage, in 20 month marriage, 31 years-old, 47% for women, and earned 2,437 Euro.
+xttab marry
+* For 'Overall' column, 88.71% (6,366) of the total observations (7,176) are single, while 11.29% (810) are in marriage.
+* For 'Between' column, 1,972 among between observations are at least once single, while 306 (15.52%) are at least (ever) in marriage in his/her observations.
+* For 'Within' column, 92.2% for 1,972 between observations are experienced single, while 50.27% for 306 between observations are experienced marriage.
+xttrans marry
+// report transition probabilities that the status of marriage changes over time
+/* 93.49% observations are still in single at the former status and at the latter status.
+In other word, only 6.51% observations are changed into getting married from single.
+There is no divorce case (2,1) from marriage to single in the observation period.
+*/
+
+*Exercise 3-(c)
+
+reg happy i.marry age i.first_wave i.woman hhincnet, cluster(id)
+predict p_ols, r
+est store p_ols
+xtreg happy i.marry age i.first_wave i.woman hhincnet, re vce(cluster id)
+predict re
+est store re
+xttest0   // Breusch and Pagan Lagrangian multiplier test for random effects
+*The value of chi-square is significant that the coefficients of variances for the pooled OLS model differ from those of the random-effects model.
+*Variances of the observations are not independent among each other so that the pooled OLS model should be rejected.
+xtreg happy i.marry age i.first_wave i.woman hhincnet, fe vce(cluster id)
+predict fe
+est store fe
+
+**For Hausman test without clustering
+xtreg happy i.marry age i.first_wave i.woman hhincnet, re
+est store RE
+xtreg happy i.marry age i.first_wave i.woman hhincnet, fe
+est store FE
+hausman RE FE, sigmamore
+*The value of chi-square is significant that the coefficients of fixed-effects model differ from those of the random-effects model.
+*It means the random-effects model has unobserved heterogeneity so that the random-effects model should be rejected.
+
+est tab p_ols re fe, b(%7.3f) se(%7.4f) stfmt(%6.0f) stats(N N_clust)
+est tab p_ols re fe, star(.05 .01 .001)
+
+pwcorr happy marry age first_wave woman hhincnet relstat mardur cohort, star(1)
+/*'relstat', 'hhincnet', and 'marry' are highly correlated with 'happy'. 'relstat' has higher correlation with 'happy' than 'marry'. 
+This is because the concept of 'relstat' include more information such as cohabition without marry, which can affect the happiness level for individuals.
+But, the coefficient of 'marry' in the FE model is insignificant and the smallest among the pooled OLS, the RE model, and the FE model.
+Significance of 'marry' in the pooled OLS and the RE models disappear in the FE model. This is interpreted as that the happier are easier to get married.
+With respect to 'age', the older are less happy than the younger (between variation) possibly due to health problems, 
+but within a individual, it's not valid that happiness of happier people doesn't matter whether aging or not.
+Also, household income is significantly correlated to 'happy'. 
+But, the coefficient of 'hhincnet' in the FE model is the smallest among the pooled OLS, the RE model, and the FE model.
+This partially reveals selective bias for the individuals that origianlly happier people earn more than less happy people. 
+But, it's still significant of 0.056 in the FE model at the 1% level of the confidence interval.
+Considering the results of Breusch and Pagan test and Hausman test with insignificance of the FE model, 
+there should be selective bias and the FE model should be adopted rather than the pooled OLS and the RE model. 
+*/
+
+*Exercise 3-(d)
+
+
+xtreg happy i.marry age i.first_wave i.woman hhincnet c.mardur##c.mardur, fe vce(cluster id)  // include the marriage duration in linear and square form in the FE model
+predict fe_mardur
+est store fe_mardur
+est tab p_ols re fe fe_mardur, b(%7.3f) se(%7.4f) stfmt(%6.0f) stats(N N_clust)
+est tab p_ols re fe fe_mardur, star(.05 .01 .001)
+
+/*In 3-(c), the FE model's within R-square value is 0.0032. After introducing 'mardur', the explanatory power of the model increase by 0.0122.
+For the variables, 'marry' and 'mardur', singles are equally dropped out in the FE model which removes individuals who don't have any change.
+But the difference is in 'mardur' that observations with changes can reflect more detailed information across the period as time goes by.
+The information of 'marry' is at maxium 6 times, but 'mardur' provides at maximum 72 times within the observation window.
+'mardur' is more appropriate for the impact fuction which can tract changes on the dependent variable over time.
+In the following FE model with an event-time clock dummy of 'i.mardur', I cannot find out any linear or curvlinear relationship, in spite of the high R-square value (0.1437) and significance of temporal effects (F-test). 
+On the middle of the marriage duration, negative coefficients in the event-time dummy temporally appeared and disappeared.
+There might be other possible factors such as child and economic conditions, which can affect the depedent variable of 'happy'. 
+*/
+
+testparm i.mardur  // F-test for temporal effects in marriage duration
+xtreg happy age hhincnet i.mardur c.mardur##c.mardur, fe vce(cluster id) // FE regression with time-dummies
+
